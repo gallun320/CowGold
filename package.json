@@ -1,0 +1,12 @@
+{
+  "name": "cow-farm",
+  "version": "0.0.1",
+  "description": "Cow farm",
+  "main": "index.js",
+  "scripts": {
+    "start": "./node_modules/.bin/http-server -o -p 8000 -c-1"
+  },
+  "dependencies": {
+    "http-server": "^14.1.1"
+  }
+}
