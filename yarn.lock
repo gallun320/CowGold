@@ -51,6 +51,11 @@ color-name@~1.1.4:
   resolved "https://registry.npmmirror.com/color-name/-/color-name-1.1.4.tgz#c2a09a87acbde69543de6f63fa3995c826c536a2"
   integrity sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==
 
+core-js@3:
+  version "3.29.0"
+  resolved "https://registry.npmmirror.com/core-js/-/core-js-3.29.0.tgz#0273e142b67761058bcde5615c503c7406b572d6"
+  integrity sha512-VG23vuEisJNkGl6XQmFJd3rEG/so/CNatqeE+7uZAwTSwFeB/qaO0be8xZYUNWprJ/GIwL8aMt9cj1kvbpTZhg==
+
 corser@^2.0.1:
   version "2.0.1"
   resolved "https://registry.npmmirror.com/corser/-/corser-2.0.1.tgz#8eda252ecaab5840dcd975ceb90d9370c819ff87"
@@ -151,6 +156,10 @@ iconv-lite@0.6.3:
   dependencies:
     safer-buffer ">= 2.1.2 < 3.0.0"
 
+"javascript-astar@github:mikewesthad/javascript-astar":
+  version "0.4.2"
+  resolved "https://codeload.github.com/mikewesthad/javascript-astar/tar.gz/c0304b12861eda334e27f2f15d701c10b296593f"
+
 lodash@^4.17.14:
   version "4.17.21"
   resolved "https://registry.npmmirror.com/lodash/-/lodash-4.17.21.tgz#679591c564c3bffaae8454cf0b3df370c3d6911c"
@@ -178,6 +187,14 @@ ms@^2.1.1:
   resolved "https://registry.npmmirror.com/ms/-/ms-2.1.3.tgz#574c8138ce1d2b5861f0b44579dbadd60c6615b2"
   integrity sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==
 
+navmesh@^2.3.1:
+  version "2.3.1"
+  resolved "https://registry.npmmirror.com/navmesh/-/navmesh-2.3.1.tgz#056ad258b3070878248f49ddcaadad0f77799ae4"
+  integrity sha512-psNjH0lNJbprtlTNo4gmhqIgNhZxQgxiGtnGAOmtL7I/tByoGfAfDX+/LD/5b26XuLZw3XXTr0+tHScnm5MBWw==
+  dependencies:
+    core-js "3"
+    javascript-astar "github:mikewesthad/javascript-astar"
+
 object-inspect@^1.9.0:
   version "1.12.3"
   resolved "https://registry.npmmirror.com/object-inspect/-/object-inspect-1.12.3.tgz#ba62dffd67ee256c8c086dfae69e016cd1f198b9"
@@ -187,6 +204,14 @@ opener@^1.5.1:
   version "1.5.2"
   resolved "https://registry.npmmirror.com/opener/-/opener-1.5.2.tgz#5d37e1f35077b9dcac4301372271afdeb2a13598"
   integrity sha512-ur5UIdyw5Y7yEj9wLzhqXiy6GZ3Mwx0yGI+5sMn2r0N0v3cKJvUmFH5yPP+WXh9e0xfyzyJX95D8l088DNFj7A==
+
+phaser-navmesh@^2.3.1:
+  version "2.3.1"
+  resolved "https://registry.npmmirror.com/phaser-navmesh/-/phaser-navmesh-2.3.1.tgz#ccf271ed6649c0d1ba74cfe01170efd8d9160530"
+  integrity sha512-804eKhaa0cyVBFBQ1TA1M6QclclbFiPoBYyLInw7GKO8EITQbNWrBHkmS3jlbVOor89oTUALbwZDd74pVdMP3w==
+  dependencies:
+    core-js "3"
+    navmesh "^2.3.1"
 
 portfinder@^1.0.28:
   version "1.0.32"

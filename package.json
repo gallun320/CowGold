@@ -7,6 +7,7 @@
     "start": "./node_modules/.bin/http-server -o -p 8000 -c-1"
   },
   "dependencies": {
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "phaser-navmesh": "^2.3.1"
   }
 }

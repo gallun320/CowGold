@@ -1,4 +1,3 @@
-
 var directions = {
     west: { offset: 0, x: -2, y: 0, opposite: 'east' },
     northWest: { offset: 32, x: -2, y: -1, opposite: 'southEast' },
@@ -144,8 +143,12 @@ var scene;
 //     }
 // }
 
-class Cow extends Phaser.GameObjects.Image {
-    constructor(scene, x, y, motion, direction) {
+const map = (value, min, max, newMin, newMax) => {
+    return ((value - min) / (max - min)) * (newMax - newMin) + newMin;
+  };
+
+class Cow extends Phaser.GameObjects.Sprite {
+    constructor(scene, x, y, motion, direction, navMesh) {
         super(scene, x, y, 'cow', direction.offset);
         this.startX = x;
         this.startY = y;
@@ -155,10 +158,13 @@ class Cow extends Phaser.GameObjects.Image {
         this.direction = direction;
         this.speed = 0.15;
         this.f = this.anim.startFrame;
+        this.navMesh = navMesh;
+        this.path = null;
+        this.currentTarget = null;
 
         this.depth = y + 64;
-
-        scene.time.delayedCall(this.anim.speed * 1000, this.changeFrame, [], this);
+        scene.physics.world.enable(this);
+        this.timerEvent = scene.time.delayedCall(this.anim.speed * 1000, this.changeFrame, [], this);
     }
 
     changeFrame ()
@@ -166,6 +172,8 @@ class Cow extends Phaser.GameObjects.Image {
         this.f++;
 
         var delay = this.anim.speed;
+        if(!this.timerEvent)
+            return;
 
         if (this.f === this.anim.endFrame)
         {
@@ -174,22 +182,22 @@ class Cow extends Phaser.GameObjects.Image {
                 case 'walk':
                     this.f = this.anim.startFrame;
                     this.frame = this.texture.get(this.direction.offset + this.f);
-                    scene.time.delayedCall(delay * 1000, this.changeFrame, [], this);
+                    this.timerEvent = scene.time.delayedCall(delay * 1000, this.changeFrame, [], this);
                     break;
 
                 case 'attack':
                     delay = Math.random() * 2;
-                    scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
+                    this.timerEvent = scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
                     break;
 
                 case 'idle':
                     delay = 0.5 + Math.random();
-                    scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
+                    this.timerEvent = scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
                     break;
 
                 case 'die':
                     delay = 6 + Math.random() * 6;
-                    scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
+                    this.timerEvent = scene.time.delayedCall(delay * 1000, this.resetAnimation, [], this);
                     break;
             }
         }
@@ -207,33 +215,101 @@ class Cow extends Phaser.GameObjects.Image {
 
         this.frame = this.texture.get(this.direction.offset + this.f);
 
-        scene.time.delayedCall(this.anim.speed * 1000, this.changeFrame, [], this);
+        this.timerEvent = scene.time.delayedCall(this.anim.speed * 1000, this.changeFrame, [], this);
     }
 
-    update ()
-    {
-        if (this.motion === 'walk')
+    goTo(targetPoint) {
+        // Find a path to the target
+        this.path = this.navMesh.findPath(new Phaser.Math.Vector2(this.x, this.y), targetPoint);
+        console.log(this.path, this.path.shift(), this.path && this.path.length > 0);
+    
+        // If there is a valid path, grab the first point from the path and set it as the target
+        if (this.path && this.path.length > 0) 
         {
-            this.x += this.direction.x * this.speed;
+            this.currentTarget = this.path.shift();
+            this.motion = 'walk';
+            this.anim = anims[this.motion];
+            this.timerEvent.destroy();
+            this.resetAnimation();
+        }
+        else this.currentTarget = null;
+    }
 
-            if (this.direction.y !== 0)
-            {
-                this.y += this.direction.y * this.speed;
-                this.depth = this.y + 64;
-            }
-
-            //  Walked far enough?
-            if (Phaser.Math.Distance.Between(this.startX, this.startY, this.x, this.y) >= this.distance)
-            {
-                this.motion = "idle";
-                this.anim = anims[this.motion];
-                this.f = this.anim.startFrame;
-                this.frame = this.texture.get(this.direction.offset + this.f);
-                this.startX = this.x;
-                this.startY = this.y;
-            }
+    update(time, deltaTime) {
+        // Bugfix: Phaser's event emitter caches listeners, so it's possible to get updated once after
+        // being destroyed
+        if (!this.body) return;
+    
+        // Stop any previous movement
+        this.body.velocity.set(0);
+    
+        if (this.currentTarget) {
+          // Check if we have reached the current target (within a fudge factor)
+          const { x, y } = this.currentTarget;
+          const distance = Phaser.Math.Distance.Between(this.x, this.y, x, y);
+    
+          if (distance < 5) {
+            // If there is path left, grab the next point. Otherwise, null the target.
+            if (this.path.length > 0) this.currentTarget = this.path.shift();
+            else this.currentTarget = null;
+          }
+    
+          // Slow down as we approach final point in the path. This helps prevent issues with the
+          // physics body overshooting the goal and leaving the mesh.
+          let speed = 400;
+          if (this.path.length === 0 && distance < 50) {
+            speed = map(distance, 50, 0, 400, 50);
+          }
+    
+          // Still got a valid target?
+          if (this.currentTarget) 
+          {
+            this.moveTowards(this.currentTarget, speed, deltaTime / 1000);
+          }
+          else if(this.motion !== 'idle'){
+            this.motion = 'idle';
+            this.anim = anims[this.motion];
+            this.timerEvent.destroy();
+            this.resetAnimation();
+          }
         }
     }
+    
+    moveTowards(targetPosition, maxSpeed = 200, elapsedSeconds) {
+        const { x, y } = targetPosition;
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, x, y);
+        const distance = Phaser.Math.Distance.Between(this.x, this.y, x, y);
+        const targetSpeed = distance / elapsedSeconds;
+        const magnitude = Math.min(maxSpeed, targetSpeed);
+    
+        this.scene.physics.velocityFromRotation(angle, magnitude, this.body.velocity);
+        this.depth = y + 64;
+    }
+
+    // update ()
+    // {
+    //     if (this.motion === 'walk')
+    //     {
+    //         this.x += this.direction.x * this.speed;
+
+    //         if (this.direction.y !== 0)
+    //         {
+    //             this.y += this.direction.y * this.speed;
+    //             this.depth = this.y + 64;
+    //         }
+
+    //         //  Walked far enough?
+    //         if (Phaser.Math.Distance.Between(this.startX, this.startY, this.x, this.y) >= this.distance)
+    //         {
+    //             this.motion = "idle";
+    //             this.anim = anims[this.motion];
+    //             this.f = this.anim.startFrame;
+    //             this.frame = this.texture.get(this.direction.offset + this.f);
+    //             this.startX = this.x;
+    //             this.startY = this.y;
+    //         }
+    //     }
+    // }
 
     walk(direction) 
     {
@@ -258,6 +334,7 @@ class CowLandScene extends Phaser.Scene
     preload ()
     {
         this.load.json('map', 'assets/isometric-grass-and-water-worked.json');
+        this.load.tilemapTiledJSON('map', 'assets/isometric-grass-and-water-worked.json');
         this.load.spritesheet('tiles', 'assets/isometric-grass-and-water.png', { frameWidth: 64, frameHeight: 64 });
         this.load.spritesheet('cow', 'assets/skeleton8.png', { frameWidth: 128, frameHeight: 128 });
         this.load.image('house', 'assets/rem_0002.png');
@@ -270,25 +347,31 @@ class CowLandScene extends Phaser.Scene
         this.buildMap();
         this.placeHouses();
 
-        cow = this.add.existing(new Cow(this, 0, 0, 'idle', { offset: 0, x: -2, y: 1}));
+        const tilemap = this.add.tilemap("map");
+        const navMesh = this.navMeshPlugin.buildMeshFromTilemap("tileMesh", tilemap);
+        cow = this.add.existing(new Cow(this, 1450, 320, 'idle', { offset: 0, x: -2, y: 1}, navMesh));
 
-        // this.cameras.main.setSize(1600, 600);
+        this.cameras.main.setBounds(0, 0, 1920 * 2, 1080 * 2);
+        this.physics.world.setBounds(0, 0, 1920 * 2, 1080 * 2);
         
         this.cameras.main.startFollow(cow);
 
         this.input.on('pointerdown', function (pointer) {
+            
+            const end = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY);
 
-            console.log('down');
-            console.log(pointer.x, pointer.y);
+            // Tell the follower sprite to find its path to the target
+            console.log(end);
+            cow.goTo(end);
     
             // cow.walk({ offset: 0, x: -2, y: 1, startX: pointer.x, startY: pointer.y});
     
         }, this);
     }
 
-    update ()
+    update (time, deltaTime)
     {
-        cow.update();
+        cow.update(time, deltaTime);
     }
 
 
@@ -343,7 +426,18 @@ const config = {
     width: 800,
     height: 600,
     backgroundColor: '#ababab',
-    scene: [ CowLandScene ]
+    scene: [ CowLandScene ],
+    physics: {
+        default: "arcade",
+        arcade: {
+          gravity: 0,
+        },
+    },
+    plugins: {
+        scene: [
+          { key: "NavMeshPlugin", plugin: PhaserNavMeshPlugin, mapping: "navMeshPlugin", start: true }
+        ]
+    }
 };
 
 var game = new Phaser.Game(config);
