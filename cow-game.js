@@ -148,7 +148,7 @@ const map = (value, min, max, newMin, newMax) => {
   };
 
 class Cow extends Phaser.GameObjects.Sprite {
-    constructor(scene, x, y, motion, direction, navMesh) {
+    constructor(scene, x, y, motion, direction, navMesh, idx) {
         super(scene, x, y, 'cow', direction.offset);
         this.startX = x;
         this.startY = y;
@@ -163,7 +163,9 @@ class Cow extends Phaser.GameObjects.Sprite {
         this.currentTarget = null;
 
         this.depth = y + 64;
+        this.idx = idx;
         scene.physics.world.enable(this);
+        this.parent = scene;
         this.timerEvent = scene.time.delayedCall(this.anim.speed * 1000, this.changeFrame, [], this);
     }
 
@@ -267,10 +269,11 @@ class Cow extends Phaser.GameObjects.Sprite {
             this.moveTowards(this.currentTarget, speed, deltaTime / 1000);
           }
           else if(this.motion !== 'idle'){
-            this.motion = 'idle';
-            this.anim = anims[this.motion];
-            this.timerEvent.destroy();
-            this.resetAnimation();
+            const self = this;
+            this.destroy();
+            this.parent.cows = this.parent.cows.filter(function(value, index, arr){ 
+                return index != self.idx;
+            });
           }
         }
     }
@@ -311,17 +314,17 @@ class Cow extends Phaser.GameObjects.Sprite {
     //     }
     // }
 
-    walk(direction) 
-    {
-        this.motion = 'walk';
-        this.direction = direction;
-        this.anim = anims[this.motion];
-        this.startX = this.x;
-        this.startY = this.y;
-        console.log(Phaser.Math.Distance.Between(this.startX, this.startY, direction.x, direction.y));
-        this.distance = Phaser.Math.Distance.Between(this.startX, this.startY, direction.startX, direction.startY);
-        this.resetAnimation();
-    }
+    // walk(direction) 
+    // {
+    //     this.motion = 'walk';
+    //     this.direction = direction;
+    //     this.anim = anims[this.motion];
+    //     this.startX = this.x;
+    //     this.startY = this.y;
+    //     console.log(Phaser.Math.Distance.Between(this.startX, this.startY, direction.x, direction.y));
+    //     this.distance = Phaser.Math.Distance.Between(this.startX, this.startY, direction.startX, direction.startY);
+    //     this.resetAnimation();
+    // }
 }
 
 class CowLandScene extends Phaser.Scene
@@ -329,6 +332,12 @@ class CowLandScene extends Phaser.Scene
     constructor ()
     {
         super();
+
+        this.existedPopup = {
+            'wareHouse': false
+        };
+        this.cows = [];
+        this.navMesh;
     }
 
     preload ()
@@ -345,33 +354,61 @@ class CowLandScene extends Phaser.Scene
         scene = this;
 
         this.buildMap();
-        this.placeHouses();
+        
+        const house_1 = scene.add.sprite(530, 370, 'house').setInteractive();
+        house_1.depth = house_1.y + 86;
+
+        house_1.on('pointerdown', function (pointer) {
+            console.log("click on house");
+            // const end = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY);
+            // cow.goTo(end);
+            if(this.existedPopup['wareHouse'])
+            {
+                this.removeWindow('wareHouse');
+                return;
+            }
+
+            if(!this.existedPopup['wareHouse'])
+            {
+                this.createWindow(Warehouse, 'wareHouse');
+                return;
+            }
+        }, this);
+
+        const house_2 = scene.add.sprite(1300, 290, 'house');
+        house_2.depth = house_2.y + 86;
 
         const tilemap = this.add.tilemap("map");
-        const navMesh = this.navMeshPlugin.buildMeshFromTilemap("tileMesh", tilemap);
-        cow = this.add.existing(new Cow(this, 1450, 320, 'idle', { offset: 0, x: -2, y: 1}, navMesh));
+        this.navMesh = this.navMeshPlugin.buildMeshFromTilemap("tileMesh", tilemap);
 
         this.cameras.main.setBounds(0, 0, 1920 * 2, 1080 * 2);
         this.physics.world.setBounds(0, 0, 1920 * 2, 1080 * 2);
         
-        this.cameras.main.startFollow(cow);
+        // this.cameras.main.startFollow(cow);
 
         this.input.on('pointerdown', function (pointer) {
-            
-            const end = new Phaser.Math.Vector2(pointer.worldX, pointer.worldY);
-
-            // Tell the follower sprite to find its path to the target
-            console.log(end);
-            cow.goTo(end);
-    
-            // cow.walk({ offset: 0, x: -2, y: 1, startX: pointer.x, startY: pointer.y});
-    
+            console.log("pointer down");
+            this.cameras.main.centerOn(pointer.worldX, pointer.worldY);
         }, this);
     }
 
     update (time, deltaTime)
     {
-        cow.update(time, deltaTime);
+        this.cows.forEach(function(cow) {
+            cow.update(time, deltaTime);
+        });
+    }
+
+    addCow(point)
+    {
+        if(point === 'wareHouse') 
+        {
+            this.removeWindow('wareHouse');
+            const cow = this.add.existing(new Cow(this, 530, 370, 'idle', { offset: 0, x: -2, y: 1 }, this.navMesh, this.cows.length));
+            this.cows.push(cow);
+            const end = new Phaser.Math.Vector2(1300, 290);
+            cow.goTo(end);
+        }
     }
 
 
@@ -414,12 +451,58 @@ class CowLandScene extends Phaser.Scene
         }
     }
 
-    placeHouses ()
+    createWindow (func, uniqueId)
     {
-        const house_1 = scene.add.image(530, 370, 'house');
-        house_1.depth = house_1.y + 86;
+        var x = Phaser.Math.Between(400, 600);
+        var y = Phaser.Math.Between(64, 128);
+
+        var win = this.add.zone(x, y, func.WIDTH, func.HEIGHT).setInteractive().setOrigin(0);
+
+        const newScene = new func(uniqueId, win, this);
+        this.scene.add(uniqueId, newScene, true);
+        this.existedPopup[uniqueId] = true;
+    }
+
+    removeWindow(uniqueId) 
+    {
+        this.scene.manager.remove(uniqueId);
+        this.existedPopup[uniqueId] = false;
     }
 }
+
+class Warehouse extends Phaser.Scene {
+
+    constructor (handle, parent, parentScene)
+    {
+        super(handle);
+
+        this.parent = parent;
+        this.parentScene = parentScene;
+        this.bounds = { x: 12, y: 62, right: 152 };
+    }
+
+    create ()
+    {
+        this.cameras.main.setViewport(this.parent.x, this.parent.y, Warehouse.WIDTH, Warehouse.HEIGHT);
+        this.cameras.main.setBackgroundColor('#000');
+
+        var x = this.bounds.x;
+        var y = this.bounds.y;
+        for (var i = 0; i < 1; i++)
+        {
+            const result = this.add.sprite(x, y, 'cow').setOrigin(0).setInteractive();
+            result.on("pointerdown", function() {
+                console.log(this.parentScene.addCow);
+                this.parentScene.addCow('wareHouse');
+            }, this);
+
+            x += 26;
+        }
+    }
+}
+
+Warehouse.WIDTH = 328;
+Warehouse.HEIGHT = 226;
 
 const config = {
     type: Phaser.WEBGL,
